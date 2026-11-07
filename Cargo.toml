@@ -1,0 +1,20 @@
+[package]
+name = "buntrail-core"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99.1"
+description = "Revisioned documents and shared editor contracts."
+license = "MIT"
+repository = "https://github.com/buntrail/buntrail-core"
+homepage = "https://github.com/buntrail"
+documentation = "https://docs.rs/buntrail-core"
+readme = "README.md"
+authors = ["Bunga Mungil <bungamungil@icloud.com>"]
+
+[dependencies]
+futures-core = "=0.3.31"
+ropey = { version = "=1.6.1", default-features = false }
+
+serde = { version = "=1.0.229", features = ["derive", "rc"] }
+
+regex = "=1.13.1"
