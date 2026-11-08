@@ -68,6 +68,77 @@ impl TerminalNode {
             }
         }
     }
+    // Locate the group before editing so perpendicular boundaries stay independent.
+    fn group_path(
+        &self,
+        target: TerminalSessionID,
+        orientation: Option<SplitOrientation>,
+    ) -> Option<(Vec<bool>, SplitOrientation)> {
+        fn locate(
+            node: &TerminalNode,
+            target: TerminalSessionID,
+            path: &mut Vec<(bool, SplitOrientation)>,
+        ) -> bool {
+            match node {
+                TerminalNode::Pane(id) => *id == target,
+                TerminalNode::Split {
+                    orientation,
+                    first,
+                    second,
+                    ..
+                } => {
+                    path.push((false, *orientation));
+                    if locate(first, target, path) {
+                        return true;
+                    }
+                    path.last_mut().unwrap().0 = true;
+                    if locate(second, target, path) {
+                        return true;
+                    }
+                    path.pop();
+                    false
+                }
+            }
+        }
+        let mut path = Vec::new();
+        if !locate(self, target, &mut path) {
+            return None;
+        }
+        let orientation = orientation.or_else(|| path.last().map(|(_, axis)| *axis))?;
+        while path.last().is_some_and(|(_, axis)| *axis == orientation) {
+            path.pop();
+        }
+        Some((
+            path.into_iter().map(|(second, _)| second).collect(),
+            orientation,
+        ))
+    }
+    fn equalize_at(&mut self, path: &[bool], orientation: SplitOrientation) {
+        let mut node = self;
+        for second_child in path {
+            let Self::Split { first, second, .. } = node else {
+                unreachable!("surviving split group path")
+            };
+            node = if *second_child { second } else { first };
+        }
+        node.equalize(orientation);
+    }
+    fn equalize(&mut self, axis: SplitOrientation) -> usize {
+        if let Self::Split {
+            orientation,
+            ratio,
+            first,
+            second,
+        } = self
+            && *orientation == axis
+        {
+            let left = first.equalize(axis);
+            let right = second.equalize(axis);
+            *ratio = left as f64 / (left + right) as f64;
+            return left + right;
+        }
+        1
+    }
     fn resize(&mut self, target: TerminalSessionID, value: f64) -> bool {
         match self {
             Self::Pane(_) => false,
@@ -247,7 +318,12 @@ impl TerminalLayoutState {
                 ids.contains(&target)
             })
             .ok_or_else(invalid)?;
+        let (path, axis) = tab
+            .root
+            .group_path(target, Some(orientation))
+            .expect("validated target");
         tab.root.split(target, id, orientation);
+        tab.root.equalize_at(&path, axis);
         tab.focused = id;
         self.selected = Some(tab.id);
         self.runtimes.push((id, operation, runtime));
@@ -333,10 +409,14 @@ impl TerminalLayoutState {
             .ok_or_else(invalid)?;
         self.retired.push((intent.0, intent.1, intent.2.clone()));
         self.runtimes.retain(|(session, _, _)| *session != id);
+        let group = self.tabs[index].root.group_path(id, None);
         let root = self.tabs[index].root.clone().remove(id);
         if let Some(root) = root {
             let tab = &mut self.tabs[index];
             tab.root = root;
+            if let Some((path, axis)) = group {
+                tab.root.equalize_at(&path, axis);
+            }
             if tab.focused == id {
                 let mut ids = vec![];
                 tab.root.sessions(&mut ids);
