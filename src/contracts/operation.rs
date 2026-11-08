@@ -36,6 +36,8 @@ pub enum MutationResult {
     GitChanged {
         worktree: WorktreeIdentity,
         state: GitExpectedState,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        outcome: Option<Box<RepositoryOutcome>>,
     },
     TerminalOpened {
         session: TerminalSessionID,

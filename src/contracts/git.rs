@@ -68,10 +68,17 @@ pub struct DiffSnapshot {
     pub bytes: Vec<u8>,
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct HistoryFilter {
+    pub authored_since: Option<i64>,
+    pub text: String,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct HistoryQuery {
     pub worktree: WorktreeIdentity,
     pub ref_filter: Vec<Vec<u8>>,
     pub cursor: Option<Vec<u8>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter: Option<HistoryFilter>,
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GraphCommit {
@@ -93,6 +100,7 @@ pub struct GraphPage {
 }
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum GitMutation {
+    Repository(RepositoryAction),
     Stage(Vec<TargetPath>),
     Unstage(Vec<TargetPath>),
     Commit { message: String },
@@ -207,4 +215,131 @@ impl GitRead {
             _ => return None,
         })
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GitRef {
+    pub name: Vec<u8>,
+    pub oid: String,
+    pub peeled_oid: Option<String>,
+    pub current: bool,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GitStash {
+    pub selector: Vec<u8>,
+    pub oid: String,
+    pub subject: String,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GitWorktree {
+    pub path: TargetPath,
+    pub branch: Option<Vec<u8>>,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GitMergeState {
+    pub heads: Vec<String>,
+    pub session: Option<OperationID>,
+    pub message: String,
+    pub conflicts: Vec<TargetPath>,
+    pub error: Option<String>,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GitRepositorySnapshot {
+    pub worktree: WorktreeIdentity,
+    pub state: GitExpectedState,
+    pub refs: Vec<GitRef>,
+    pub changes: Vec<GitEntry>,
+    pub stashes: Vec<GitStash>,
+    pub remotes: Vec<Vec<u8>>,
+    pub worktrees: Vec<GitWorktree>,
+    pub merge: Option<GitMergeState>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CommitQuery {
+    pub worktree: WorktreeIdentity,
+    pub oid: String,
+    pub cursor: Option<u64>,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GitCommitFile {
+    pub path: TargetPath,
+    pub previous_path: Option<TargetPath>,
+    pub change: DiffChange,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct CommitPage {
+    pub oid: String,
+    pub parents: Vec<String>,
+    pub author: String,
+    pub email: String,
+    pub authored_at: String,
+    pub message: String,
+    pub files: Vec<GitCommitFile>,
+    pub next_cursor: Option<u64>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub enum RepositoryAction {
+    Merge {
+        source_ref: Vec<u8>,
+        source_oid: String,
+    },
+    ContinueMerge {
+        session: Option<OperationID>,
+        expected_heads: Vec<String>,
+        message: String,
+    },
+    AbortMerge {
+        session: OperationID,
+    },
+    SwitchBranch {
+        name: Vec<u8>,
+        expected_oid: String,
+    },
+    CreateBranch {
+        name: Vec<u8>,
+        source_ref: Vec<u8>,
+        start_oid: String,
+    },
+    RenameBranch {
+        name: Vec<u8>,
+        new_name: Vec<u8>,
+        expected_oid: String,
+    },
+    CreateTag {
+        name: Vec<u8>,
+        source_ref: Vec<u8>,
+        start_oid: String,
+    },
+    DeleteBranch {
+        name: Vec<u8>,
+        expected_oid: String,
+    },
+}
+
+impl GitMutation {
+    pub fn changes_worktree(&self) -> bool {
+        matches!(
+            self,
+            Self::Checkout { .. }
+                | Self::PullFastForward { .. }
+                | Self::Repository(
+                    RepositoryAction::SwitchBranch { .. }
+                        | RepositoryAction::Merge { .. }
+                        | RepositoryAction::ContinueMerge { .. }
+                        | RepositoryAction::AbortMerge { .. }
+                )
+        )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum RepositoryOutcome {
+    RefsUpdated,
+    CheckedOut,
+    Merged { oid: String },
+    MergePending { merge: GitMergeState },
+    MergeAborted,
 }

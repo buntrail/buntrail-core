@@ -14,6 +14,7 @@ pub struct TerminalStart {
 }
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub enum GitRecoveryKind {
+    Repository,
     Stage,
     Unstage,
     Checkout,
@@ -27,6 +28,8 @@ pub struct GitRecoveryReference {
     pub operation: OperationID,
     pub worktree: WorktreeIdentity,
     pub kind: GitRecoveryKind,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repository_action: Option<RepositoryAction>,
     pub request_digest: [u8; 32],
     pub owner: WorkspaceLease,
 }
