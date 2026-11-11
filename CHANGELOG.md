@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+File-sidebar operations and compatible shared core contracts. C ABI remains version 1.
+
 ## 0.2.0 — Git Repository
 
 Add byte-preserving repository, commit, history filter, branch action and merge outcome contracts. This breaks Rust struct/enum constructors; legacy JSON fields remain unchanged when new options are absent.

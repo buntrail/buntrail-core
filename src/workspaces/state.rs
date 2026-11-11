@@ -33,6 +33,24 @@ pub struct GitRecoveryReference {
     pub request_digest: [u8; 32],
     pub owner: WorkspaceLease,
 }
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub enum FileRecoveryKind {
+    Create,
+    CreateDirectory,
+    Import,
+    Move,
+    Remove,
+    Trash,
+}
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct FileRecoveryReference {
+    pub operation: OperationID,
+    pub file: FileRef,
+    pub destination: Option<TargetPath>,
+    pub kind: FileRecoveryKind,
+    pub request_digest: [u8; 32],
+    pub owner: WorkspaceLease,
+}
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct WorkspaceRecord {
     pub id: WorkspaceID,
@@ -59,6 +77,8 @@ pub struct WorkspaceRecord {
     pub git_recoveries: Vec<GitRecoveryReference>,
     #[serde(default)]
     pub git_recovery_generation: u64,
+    #[serde(default)]
+    pub file_recoveries: Vec<FileRecoveryReference>,
 }
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct WorkspaceCatalog {
@@ -79,4 +99,65 @@ pub struct RecoveryEntry {
     pub provisional: bool,
     pub unknown_save: bool,
     pub error: Option<CoreError>,
+}
+
+#[cfg(test)]
+mod explorer_operation_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn explorer_operations_survive_workspace_round_trip() {
+        let target = TargetIdentity {
+            security_binding: vec![1],
+            effective_user: vec![2],
+            filesystem_namespace: vec![3],
+            container: None,
+        };
+        let record = WorkspaceRecord {
+            id: WorkspaceID([1; 16]),
+            generation: 0,
+            lease: WorkspaceLeaseID([2; 16]),
+            locator: WorkspaceLocator {
+                environment: EnvironmentLocator {
+                    route: RouteKind::Local,
+                    ssh_profile: None,
+                    engine: None,
+                    engine_context: None,
+                    container_selector: None,
+                    effective_user: None,
+                },
+                root: TargetPath::posix(b"/project".to_vec()).unwrap(),
+            },
+            target: target.clone(),
+            display_name: "project".into(),
+            documents: vec![],
+            selected: None,
+            show_hidden: true,
+            show_icons: true,
+            sidebar_visible: true,
+            terminal_visible: false,
+            terminal_height: None,
+            terminal_layout: Default::default(),
+            terminal_starts: vec![],
+            graph_filters: vec![],
+            git_recoveries: vec![],
+            git_recovery_generation: 0,
+            file_recoveries: vec![],
+        };
+        let mut disk = serde_json::to_value(record).unwrap();
+        let retained = json!([{
+            "operation": OperationID([3;16]),
+            "file": FileRef { target, path: TargetPath::posix(b"/project/a".to_vec()).unwrap(), resolved_identity: None },
+            "destination": null, "kind": "Trash", "request_digest": vec![4u8;32],
+            "owner": WorkspaceLease { client: ClientID([5;16]), workspace: WorkspaceID([1;16]),
+                lease: WorkspaceLeaseID([2;16]), runtime: RuntimeGeneration { supervisor_boot: [6;16], container_start: None } }
+        }]);
+        disk["file_recoveries"] = retained.clone();
+        let parsed: WorkspaceRecord = serde_json::from_value(disk).unwrap();
+        assert_eq!(
+            serde_json::to_value(parsed).unwrap()["file_recoveries"],
+            retained
+        );
+    }
 }
