@@ -72,6 +72,56 @@ pub struct HistoryFilter {
     pub authored_since: Option<i64>,
     pub text: String,
 }
+/// The selection is explicit: an empty reference list never means HEAD.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum GitHistoryScope {
+    Head,
+    All,
+    References(Vec<Vec<u8>>),
+}
+impl GitHistoryScope {
+    pub fn validate(&self) -> Result<(), CoreError> {
+        if let Self::References(refs) = self
+            && (refs.is_empty()
+                || refs.len() > 512
+                || refs
+                    .iter()
+                    .any(|r| r.is_empty() || r.len() > 4096 || r.contains(&0))
+                || refs.iter().map(Vec::len).sum::<usize>() > 32768)
+        {
+            return Err(CoreError::new(
+                ErrorCode::InvalidArgument,
+                "Choose 1–512 refs, at most 4096 bytes each and 32768 bytes combined",
+            ));
+        }
+        Ok(())
+    }
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct GitSidebarHistoryQuery {
+    pub worktree: WorktreeIdentity,
+    pub scope: GitHistoryScope,
+    pub cursor: Option<Vec<u8>>,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GitCommitSummary {
+    pub oid: String,
+    pub changed_file_count: u64,
+    pub insertion_count: u64,
+    pub deletion_count: u64,
+    pub binary_file_count: u64,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GitUpstream {
+    pub remote: Vec<u8>,
+    pub reference: Vec<u8>,
+}
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GitSidebarContext {
+    pub upstream: Option<GitUpstream>,
+    pub github_commit_base_url: Option<String>,
+}
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct HistoryQuery {
     pub worktree: WorktreeIdentity,
@@ -253,6 +303,8 @@ pub struct GitRepositorySnapshot {
     pub remotes: Vec<Vec<u8>>,
     pub worktrees: Vec<GitWorktree>,
     pub merge: Option<GitMergeState>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sidebar: Option<GitSidebarContext>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
