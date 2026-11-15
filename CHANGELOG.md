@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0 — Git sidebar
+
+Add explicit byte-preserving Git sidebar history scopes, summary and optional upstream/GitHub contracts. ABI 1 remains unchanged.
+
 ## 0.3.0
 
 File-sidebar operations and compatible shared core contracts. C ABI remains version 1.
