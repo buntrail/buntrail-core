@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1 — Failed-push review
+
+Align first-party dependencies with the corrective 0.4.1 Git sidebar release; no API or behavior changes in this crate.
+
 ## 0.4.0 — Git sidebar
 
 Add explicit byte-preserving Git sidebar history scopes, summary and optional upstream/GitHub contracts. ABI 1 remains unchanged.
